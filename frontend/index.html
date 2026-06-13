@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LightVideo - 轻量化视频理解</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header" onclick="navigateTo('home')">
+            <div class="logo-icon">
+                <span class="material-icons">smart_display</span>
+            </div>
+            <div class="logo-text">
+                <span class="logo-title">LightVideo</span>
+                <span class="logo-subtitle">轻量化视频理解</span>
+            </div>
+        </div>
+
+        <nav class="nav-list" id="navList">
+            <div class="nav-item active" data-page="home" onclick="navigateTo('home')">
+                <span class="material-icons">home</span>
+                <span>首页</span>
+            </div>
+            <div class="nav-item" data-page="summary" onclick="navigateTo('summary')">
+                <span class="material-icons">description</span>
+                <span>视频摘要</span>
+            </div>
+            <div class="nav-item" data-page="text" onclick="navigateTo('text')">
+                <span class="material-icons">text_snippet</span>
+                <span>文字提取</span>
+            </div>
+            <div class="nav-item" data-page="events" onclick="navigateTo('events')">
+                <span class="material-icons">search</span>
+                <span>事件检索</span>
+            </div>
+            <div class="nav-item" data-page="scenes" onclick="navigateTo('scenes')">
+                <span class="material-icons">movie</span>
+                <span>场景检测</span>
+            </div>
+            <div class="nav-item" data-page="track" onclick="navigateTo('track')">
+                <span class="material-icons">track_changes</span>
+                <span>目标追踪</span>
+            </div>
+
+            <div class="nav-divider"></div>
+
+            <div class="nav-item" data-page="about" onclick="navigateTo('about')">
+                <span class="material-icons">info</span>
+                <span>关于</span>
+            </div>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="ollama-status" id="ollamaStatus">
+                <span class="status-dot offline"></span>
+                <span>检测中...</span>
+            </div>
+            <div class="version">v0.1.0</div>
+        </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content" id="mainContent">
+        <!-- 页面容器 -->
+        <div id="pageContainer"></div>
+
+        <!-- 底部状态栏 -->
+        <div class="status-bar" id="statusBar" style="display:none;">
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+                </div>
+            </div>
+            <div class="status-message" id="statusMessage">就绪</div>
+        </div>
+    </main>
+
+    <!-- Toast 容器 -->
+    <div id="toastContainer"></div>
+
+    <!-- 模态框 -->
+    <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="closeModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">提示</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeModal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帧预览模态框 -->
+    <div class="modal-overlay" id="frameModal" style="display:none;" onclick="closeFrameModal()">
+        <div class="modal modal-lg" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 class="modal-title">帧预览</h3>
+                <button class="modal-close" onclick="closeFrameModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="frameModalBody" style="text-align:center;"></div>
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script src="js/components.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

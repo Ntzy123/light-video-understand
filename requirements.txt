@@ -1,0 +1,8 @@
+pywebview>=4.4
+decord>=0.4.0
+opencv-python>=4.8
+Pillow>=10.0
+requests>=2.31
+scikit-image>=0.21
+numpy>=1.24
+pyinstaller>=6.0
