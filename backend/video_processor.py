@@ -226,11 +226,15 @@ class VideoProcessor:
     def _get_frames(self, vr, indices: list[int]) -> list[Image.Image]:
         """根据索引列表获取帧并转为 PIL.Image"""
         if hasattr(vr, "get_batch"):
-            # decord
-            batch = vr.get_batch(indices).asnumpy()
-            return [Image.fromarray(f.astype("uint8")) for f in batch]
+            batch = vr.get_batch(indices)
+            if hasattr(batch, "asnumpy"):
+                # decord NDArray
+                batch = batch.asnumpy()
+                return [Image.fromarray(f.astype("uint8")) for f in batch]
+            # OpenCV _OpenCVVideoReader.get_batch 已返回 list[Image.Image]
+            return batch
         else:
-            # opencv fallback (逐个读取)
+            # 兼容无 get_batch 的读取器（逐个读取）
             return [vr.get_frame(i) for i in indices]
 
 
