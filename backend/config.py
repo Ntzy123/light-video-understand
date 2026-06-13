@@ -3,10 +3,18 @@
 import os
 import json
 
+# ===== 后端模式 =====
+API_BACKEND = "ollama"          # "ollama" | "minicpm_api" | "custom_api"
+
 # ===== Ollama 配置 =====
 OLLAMA_URL = "http://localhost:11434"
 MODEL_NAME = "minicpm-v4.6"
 OLLAMA_TIMEOUT = 120  # 单次请求超时（秒）
+
+# ===== API 配置 (MiniCPM 官方 API / 自定义 OpenAI 兼容 API) =====
+API_KEY = "sk-pQ8L2zF3XmR5kY9wV4jB7hN1tC6vM0xG3aD5sH2bJ9lK4cZ8"  # MiniCPM 免费测试 Key
+API_BASE_URL = "https://api.modelbest.cn/v1"
+API_MODEL_NAME = "MiniCPM-V-4.6-Instruct"
 
 # ===== 视频采样 =====
 MAX_NUM_FRAMES = 12      # 最大采样帧数
@@ -73,7 +81,9 @@ def load_settings():
 
 def save_settings(overlay: dict):
     """保存用户覆盖配置到 JSON 文件并更新内存"""
-    allowed_keys = {"OLLAMA_URL", "MODEL_NAME", "OLLAMA_TIMEOUT", "TEMPERATURE", "MAX_NUM_FRAMES", "CONTEXT_SIZE"}
+    allowed_keys = {"OLLAMA_URL", "MODEL_NAME", "OLLAMA_TIMEOUT", "TEMPERATURE",
+                    "MAX_NUM_FRAMES", "CONTEXT_SIZE",
+                    "API_BACKEND", "API_KEY", "API_BASE_URL", "API_MODEL_NAME"}
     to_persist = {}
     for key, value in overlay.items():
         if key in allowed_keys and key in globals():

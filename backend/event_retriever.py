@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .ollama_client import OllamaClient
+from .model_client import ModelClient
 from .video_processor import VideoProcessor
 from . import config
 
@@ -40,7 +40,7 @@ class EventRetriever:
     """关键事件检索器"""
 
     def __init__(self):
-        self.client = OllamaClient()
+        self.client = ModelClient()
         self.processor = VideoProcessor()
 
     def retrieve(

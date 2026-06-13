@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .ollama_client import OllamaClient
+from .model_client import ModelClient
 from .video_processor import VideoProcessor
 from . import config
 
@@ -37,7 +37,7 @@ class ObjectTracker:
     """目标对象出现时间标记器"""
 
     def __init__(self):
-        self.client = OllamaClient()
+        self.client = ModelClient()
         self.processor = VideoProcessor()
 
     def track(

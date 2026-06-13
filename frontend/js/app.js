@@ -64,7 +64,7 @@ function navigateTo(page) {
 }
 
 // ================================================================
-// Ollama 状态检测
+// Ollama / API 状态检测
 // ================================================================
 async function checkOllamaStatus() {
     const el = document.getElementById('ollamaStatus');
@@ -76,21 +76,28 @@ async function checkOllamaStatus() {
 
     try {
         const result = await API.checkOllama();
+        const backends = {
+            'ollama': 'Ollama',
+            'minicpm_api': 'MiniCPM API',
+            'custom_api': '自定义 API',
+        };
+        const backendLabel = backends[result.backend] || 'API';
+
         if (result.available) {
             if (result.model_available) {
                 dot.className = 'status-dot online';
-                label.textContent = `${result.model} 已就绪`;
+                label.textContent = `${backendLabel} · ${result.model}`;
             } else {
                 dot.className = 'status-dot offline';
-                label.textContent = `模型 ${result.model} 未拉取`;
+                label.textContent = `${backendLabel} · 模型不可用`;
             }
         } else {
             dot.className = 'status-dot offline';
-            label.textContent = 'Ollama 未连接';
+            label.textContent = `${backendLabel} · 未连接`;
         }
     } catch {
         dot.className = 'status-dot offline';
-        label.textContent = 'Ollama 未连接';
+        label.textContent = '服务未连接';
     }
 }
 
@@ -751,16 +758,59 @@ function renderTrackResult(data) {
 }
 
 // ================================================================
-// 设置页面
+// 通用：带超时的异步调用
+// ================================================================
+async function timeoutFetch(promise, ms) {
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('请求超时')), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+// ================================================================
+// 设置页面（支持 Ollama / MiniCPM API / 自定义 API）
 // ================================================================
 function renderSettingsPage(container) {
     container.innerHTML = `
-        <div class="page-title">⚙️ 设置</div>
-        <div class="page-subtitle">配置 Ollama 服务连接与模型参数</div>
+        <div class="page-title">设置</div>
+        <div class="page-subtitle">配置后端模型服务与生成参数</div>
 
         <div class="card settings-card">
-            <div class="section-title">Ollama 服务</div>
+            <div class="section-title">后端模式</div>
+            <div class="settings-group">
+                <div class="settings-item">
+                    <label>模型服务</label>
+                    <div class="backend-selector">
+                        <label class="backend-option" id="optOllama" onclick="onBackendOptionClick(this)">
+                            <input type="radio" name="apiBackend" value="ollama" onchange="onBackendChange()" />
+                            <div class="backend-option-text">
+                                <span class="backend-label">Ollama（本地）</span>
+                                <span class="backend-desc">通过本地 Ollama 调用模型</span>
+                            </div>
+                        </label>
+                        <label class="backend-option" id="optMinicpm" onclick="onBackendOptionClick(this)">
+                            <input type="radio" name="apiBackend" value="minicpm_api" onchange="onBackendChange()" />
+                            <div class="backend-option-text">
+                                <span class="backend-label">MiniCPM 官方 API</span>
+                                <span class="backend-desc">使用 MiniCPM 免费在线 API（自动填充配置）</span>
+                            </div>
+                        </label>
+                        <label class="backend-option" id="optCustom" onclick="onBackendOptionClick(this)">
+                            <input type="radio" name="apiBackend" value="custom_api" onchange="onBackendChange()" />
+                            <div class="backend-option-text">
+                                <span class="backend-label">自定义 API</span>
+                                <span class="backend-desc">自定义 OpenAI 兼容 API 服务</span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
 
+        <!-- Ollama 设置区 -->
+        <div class="card settings-card" id="ollamaSettings">
+            <div class="section-title">Ollama 服务</div>
             <div class="settings-group">
                 <div class="settings-item">
                     <label>服务地址</label>
@@ -778,7 +828,6 @@ function renderSettingsPage(container) {
                     <span class="settings-hint">单次 Ollama 请求的超时时间，视频较长时可适当增大</span>
                 </div>
             </div>
-
             <div style="display:flex;gap:12px;margin-top:8px;">
                 <button class="btn btn-secondary" id="btnTestConnection" onclick="handleTestConnection()">
                     <span class="material-icons">wifi_find</span> 测试连接
@@ -787,9 +836,41 @@ function renderSettingsPage(container) {
             </div>
         </div>
 
+        <!-- API 设置区 -->
+        <div class="card settings-card" id="apiSettings" style="display:none;">
+            <div class="section-title">API 配置</div>
+            <div class="settings-group">
+                <div class="settings-item">
+                    <label>API 地址</label>
+                    <input type="text" id="cfgApiBaseUrl" placeholder="https://api.modelbest.cn/v1" />
+                    <span class="settings-hint">OpenAI 兼容 API 的基础地址，末尾不加 /chat/completions</span>
+                </div>
+                <div class="settings-item">
+                    <label>API Key</label>
+                    <input type="password" id="cfgApiKey" placeholder="sk-..." />
+                    <span class="settings-hint">API 认证密钥。MiniCPM 官方 API 有免费测试 Key 可用</span>
+                </div>
+                <div class="settings-item">
+                    <label>模型名称</label>
+                    <input type="text" id="cfgApiModelName" placeholder="MiniCPM-V-4.6-Instruct" />
+                    <span class="settings-hint">使用的模型 ID，如 MiniCPM-V-4.6-Instruct、MiniCPM-o-4.5</span>
+                </div>
+                <div class="settings-item" id="minicpmModelHint" style="display:none;">
+                    <span class="settings-hint" style="color:var(--accent);">
+                        💡 MiniCPM 可用模型：MiniCPM-V-4.6-Instruct、MiniCPM-V-4.6-Thinking、MiniCPM-o-4.5
+                    </span>
+                </div>
+            </div>
+            <div style="display:flex;gap:12px;margin-top:8px;">
+                <button class="btn btn-secondary" id="btnTestApiConnection" onclick="handleTestApiConnection()">
+                    <span class="material-icons">wifi_find</span> 测试 API 连接
+                </button>
+                <div id="apiConnectionResult" style="display:none;align-self:center;font-size:13px;"></div>
+            </div>
+        </div>
+
         <div class="card settings-card">
             <div class="section-title">模型参数</div>
-
             <div class="settings-group">
                 <div class="settings-item">
                     <label>生成温度 (Temperature)</label>
@@ -807,7 +888,7 @@ function renderSettingsPage(container) {
                 <div class="settings-item">
                     <label>上下文窗口大小（tokens）</label>
                     <input type="number" id="cfgContextSize" min="2048" max="131072" step="1024" />
-                    <span class="settings-hint">模型的 context length，自动据此控制发送帧数防超限。如 MiniCPM-V 为 8192，qwen2.5-vl 72B 为 131072</span>
+                    <span class="settings-hint">模型的 context length，自动据此控制发送帧数防超限。如 MiniCPM-V 4.6 为 4096、MiniCPM-o 4.5 为 16384</span>
                 </div>
             </div>
         </div>
@@ -826,14 +907,57 @@ function renderSettingsPage(container) {
     loadConfigToForm();
 }
 
+function onBackendOptionClick(el) {
+    const radio = el.querySelector('input[type="radio"]');
+    if (radio) radio.checked = true;
+    onBackendChange();
+}
+
+function onBackendChange() {
+    // 更新选中高亮
+    document.querySelectorAll('.backend-option').forEach(opt => {
+        const radio = opt.querySelector('input[type="radio"]');
+        opt.classList.toggle('checked', radio && radio.checked);
+    });
+
+    const backend = document.querySelector('input[name="apiBackend"]:checked')?.value;
+    document.getElementById('ollamaSettings').style.display = backend === 'ollama' ? '' : 'none';
+    document.getElementById('apiSettings').style.display = backend !== 'ollama' ? '' : 'none';
+    document.getElementById('minicpmModelHint').style.display = backend === 'minicpm_api' ? '' : 'none';
+
+    // MiniCPM API 模式：自动填充
+    if (backend === 'minicpm_api') {
+        const keyInput = document.getElementById('cfgApiKey');
+        if (!keyInput.value) {
+            keyInput.value = 'sk-pQ8L2zF3XmR5kY9wV4jB7hN1tC6vM0xG3aD5sH2bJ9lK4cZ8';
+        }
+        const urlInput = document.getElementById('cfgApiBaseUrl');
+        if (!urlInput.value) {
+            urlInput.value = 'https://api.modelbest.cn/v1';
+        }
+    }
+}
+
 async function loadConfigToForm() {
     try {
         const cfg = await API.getConfig();
 
+        // 后端模式
+        const backendRadio = document.querySelector(`input[name="apiBackend"][value="${cfg.api_backend || 'ollama'}"]`);
+        if (backendRadio) backendRadio.checked = true;
+        onBackendChange();
+
+        // Ollama 字段
         document.getElementById('cfgOllamaUrl').value = cfg.ollama_url || 'http://localhost:11434';
         document.getElementById('cfgModelName').value = cfg.model_name || 'minicpm-v4.6';
         document.getElementById('cfgTimeout').value = cfg.ollama_timeout || 120;
 
+        // API 字段
+        document.getElementById('cfgApiBaseUrl').value = cfg.api_base_url || 'https://api.modelbest.cn/v1';
+        document.getElementById('cfgApiKey').value = cfg.api_key || '';
+        document.getElementById('cfgApiModelName').value = cfg.api_model_name || 'MiniCPM-V-4.6-Instruct';
+
+        // 模型参数
         const tempInput = document.getElementById('cfgTemperature');
         tempInput.value = cfg.temperature ?? 0.1;
         document.getElementById('cfgTemperatureVal').textContent = cfg.temperature ?? 0.1;
@@ -847,9 +971,13 @@ async function loadConfigToForm() {
 
 function getConfigFromForm() {
     return {
+        API_BACKEND: document.querySelector('input[name="apiBackend"]:checked')?.value || 'ollama',
         OLLAMA_URL: document.getElementById('cfgOllamaUrl').value.trim(),
         MODEL_NAME: document.getElementById('cfgModelName').value.trim(),
         OLLAMA_TIMEOUT: parseInt(document.getElementById('cfgTimeout').value) || 120,
+        API_BASE_URL: document.getElementById('cfgApiBaseUrl').value.trim(),
+        API_KEY: document.getElementById('cfgApiKey').value.trim(),
+        API_MODEL_NAME: document.getElementById('cfgApiModelName').value.trim(),
         TEMPERATURE: parseFloat(document.getElementById('cfgTemperature').value) || 0.1,
         MAX_NUM_FRAMES: parseInt(document.getElementById('cfgMaxFrames').value) || 12,
         CONTEXT_SIZE: parseInt(document.getElementById('cfgContextSize').value) || 8192,
@@ -857,6 +985,16 @@ function getConfigFromForm() {
 }
 
 async function handleTestConnection() {
+    const backend = document.querySelector('input[name="apiBackend"]:checked')?.value;
+
+    if (backend === 'ollama') {
+        await handleTestOllamaConnection();
+    } else {
+        await handleTestApiConnection();
+    }
+}
+
+async function handleTestOllamaConnection() {
     const btn = document.getElementById('btnTestConnection');
     const resultEl = document.getElementById('connectionResult');
 
@@ -864,18 +1002,17 @@ async function handleTestConnection() {
     btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite;">sync</span> 连接中...';
     resultEl.style.display = 'none';
 
-    // 先保存配置以便 check_ollama 使用新值
     const cfg = getConfigFromForm();
     await API.saveConfig(cfg);
 
     try {
-        const res = await API.checkOllama();
+        const res = await timeoutFetch(API.checkOllama(), 8000);
         resultEl.style.display = 'flex';
         if (res.available && res.model_available) {
             resultEl.innerHTML = `<span class="material-icons" style="color:var(--success);font-size:18px;">check_circle</span> 连接成功 — ${res.model} 已就绪`;
             resultEl.style.color = 'var(--success)';
         } else if (res.available && !res.model_available) {
-            resultEl.innerHTML = `<span class="material-icons" style="color:var(--warning);font-size:18px;">warning</span> Ollama 已连接，但模型 <strong>${res.model}</strong> 不可用，请检查模型名称是否正确`;
+            resultEl.innerHTML = `<span class="material-icons" style="color:var(--warning);font-size:18px;">warning</span> Ollama 已连接，但模型 <strong>${res.model}</strong> 不可用`;
             resultEl.style.color = 'var(--warning)';
         } else {
             resultEl.innerHTML = `<span class="material-icons" style="color:var(--error);font-size:18px;">error</span> 连接失败，请检查 Ollama 是否已启动`;
@@ -890,27 +1027,71 @@ async function handleTestConnection() {
         btn.innerHTML = '<span class="material-icons">wifi_find</span> 测试连接';
     }
 
-    // 刷新侧边栏状态
+    checkOllamaStatus();
+}
+
+async function handleTestApiConnection() {
+    const btn = document.getElementById('btnTestApiConnection');
+    const resultEl = document.getElementById('apiConnectionResult');
+
+    if (!btn) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite;">sync</span> 连接中...';
+    resultEl.style.display = 'none';
+
+    const cfg = getConfigFromForm();
+    await API.saveConfig(cfg);
+
+    try {
+        const res = await timeoutFetch(API.checkOllama(), 10000);
+        resultEl.style.display = 'flex';
+        if (res.available) {
+            resultEl.innerHTML = `<span class="material-icons" style="color:var(--success);font-size:18px;">check_circle</span> API 连接成功 — ${res.model}`;
+            resultEl.style.color = 'var(--success)';
+        } else {
+            resultEl.innerHTML = `<span class="material-icons" style="color:var(--error);font-size:18px;">error</span> API 连接失败，请检查地址和密钥`;
+            resultEl.style.color = 'var(--error)';
+        }
+    } catch {
+        resultEl.style.display = 'flex';
+        resultEl.innerHTML = `<span class="material-icons" style="color:var(--error);font-size:18px;">error</span> API 连接失败（请求超时），请检查地址和密钥是否正确`;
+        resultEl.style.color = 'var(--error)';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons">wifi_find</span> 测试 API 连接';
+    }
+
     checkOllamaStatus();
 }
 
 async function handleSaveConfig() {
     const cfg = getConfigFromForm();
 
-    if (!cfg.OLLAMA_URL) {
-        Components.showToast('请填写 Ollama 服务地址', 'warning');
-        return;
-    }
-    if (!cfg.MODEL_NAME) {
-        Components.showToast('请填写模型名称', 'warning');
-        return;
+    if (cfg.API_BACKEND === 'ollama') {
+        if (!cfg.OLLAMA_URL) {
+            Components.showToast('请填写 Ollama 服务地址', 'warning');
+            return;
+        }
+        if (!cfg.MODEL_NAME) {
+            Components.showToast('请填写模型名称', 'warning');
+            return;
+        }
+    } else {
+        if (!cfg.API_BASE_URL) {
+            Components.showToast('请填写 API 地址', 'warning');
+            return;
+        }
+        if (!cfg.API_MODEL_NAME) {
+            Components.showToast('请填写模型名称', 'warning');
+            return;
+        }
     }
 
     try {
         const result = await API.saveConfig(cfg);
         if (result.success) {
             Components.showToast('设置已保存', 'success');
-            // 刷新侧边栏状态
             checkOllamaStatus();
         } else {
             Components.showToast(result.error || '保存失败', 'error');
@@ -922,9 +1103,13 @@ async function handleSaveConfig() {
 
 async function handleResetConfig() {
     const defaults = {
+        API_BACKEND: 'ollama',
         OLLAMA_URL: 'http://localhost:11434',
         MODEL_NAME: 'minicpm-v4.6',
         OLLAMA_TIMEOUT: 120,
+        API_BASE_URL: 'https://api.modelbest.cn/v1',
+        API_KEY: 'sk-pQ8L2zF3XmR5kY9wV4jB7hN1tC6vM0xG3aD5sH2bJ9lK4cZ8',
+        API_MODEL_NAME: 'MiniCPM-V-4.6-Instruct',
         TEMPERATURE: 0.1,
         MAX_NUM_FRAMES: 12,
         CONTEXT_SIZE: 8192,
@@ -933,7 +1118,6 @@ async function handleResetConfig() {
     try {
         const result = await API.saveConfig(defaults);
         if (result.success) {
-            // 重新加载表单
             await loadConfigToForm();
             Components.showToast('已恢复默认设置', 'info');
             checkOllamaStatus();

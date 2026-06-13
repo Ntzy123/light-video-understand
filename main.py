@@ -12,7 +12,7 @@ from backend.text_extractor import TextExtractor
 from backend.event_retriever import EventRetriever
 from backend.scene_detector import SceneDetector
 from backend.object_tracker import ObjectTracker
-from backend.ollama_client import OllamaClient
+from backend.model_client import ModelClient
 from backend import config
 
 
@@ -33,27 +33,33 @@ class Api:
     # ================================================================
 
     def check_ollama(self) -> dict:
-        """检测 Ollama 服务状态及模型可用性"""
-        client = OllamaClient()
+        """检测模型后端服务状态及模型可用性"""
+        client = ModelClient()
         ok = client.check_connection()
+        model_name = config.MODEL_NAME if config.API_BACKEND == "ollama" else config.API_MODEL_NAME
         if not ok:
-            return {"available": False, "model": config.MODEL_NAME, "model_available": False}
+            return {"available": False, "model": model_name, "model_available": False, "backend": config.API_BACKEND}
         model_ok = client.check_model_available()
         return {
             "available": True,
-            "model": config.MODEL_NAME,
+            "model": model_name,
             "model_available": model_ok,
+            "backend": config.API_BACKEND,
         }
 
     def get_config(self) -> dict:
         """获取当前配置"""
         return {
+            "api_backend": config.API_BACKEND,
             "ollama_url": config.OLLAMA_URL,
             "model_name": config.MODEL_NAME,
             "ollama_timeout": config.OLLAMA_TIMEOUT,
             "temperature": config.TEMPERATURE,
             "max_num_frames": config.MAX_NUM_FRAMES,
             "context_size": config.CONTEXT_SIZE,
+            "api_key": config.API_KEY,
+            "api_base_url": config.API_BASE_URL,
+            "api_model_name": config.API_MODEL_NAME,
         }
 
     def save_config(self, cfg: str) -> dict:
@@ -252,7 +258,8 @@ def main():
     if os.path.exists(index_url):
         url = index_url
     else:
-        url = "data:text/html,<h1>LightVideo</h1><p>前端页面尚未创建</p>"
+        # 打包后 frontend 目录缺失时的应急 fallback（内联完整页面）
+        url = "data:text/html,<h1>LightVideo</h1><div>前端页面尚未创建，请确认打包时已包含 frontend 目录</div>"
 
     window = webview.create_window(
         title="LightVideo - 轻量化视频理解",
@@ -265,11 +272,6 @@ def main():
     )
 
     api.set_window(window)
-
-    # 检测 Ollama
-    client = OllamaClient()
-    if not client.check_connection():
-        print("⚠ 未检测到 Ollama 服务，请确保 Ollama 已启动")
 
     # 打包版不启动 devtools，python 直跑时启动
     is_packaged = getattr(sys, 'frozen', False)

@@ -10,7 +10,7 @@ from typing import Optional
 import numpy as np
 from PIL import Image
 
-from .ollama_client import OllamaClient
+from .model_client import ModelClient
 from .video_processor import VideoProcessor
 from . import config
 
@@ -43,7 +43,7 @@ class SceneDetector:
     """场景切换检测器（SSIM 粗筛 + 模型语义描述）"""
 
     def __init__(self):
-        self.client = OllamaClient()
+        self.client = ModelClient()
         self.processor = VideoProcessor()
 
     def detect(

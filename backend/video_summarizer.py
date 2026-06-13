@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass, field, asdict
 from typing import Optional
 
-from .ollama_client import OllamaClient, OllamaError
+from .model_client import ModelClient, ModelError
 from .video_processor import VideoProcessor, VideoError
 from . import config
 
@@ -38,7 +38,7 @@ class VideoSummarizer:
     """视频摘要生成器"""
 
     def __init__(self):
-        self.client = OllamaClient()
+        self.client = ModelClient()
         self.processor = VideoProcessor()
 
     def summarize(
@@ -146,7 +146,7 @@ class VideoSummarizer:
             try:
                 seg_data = self.client._safe_parse_json(resp)
                 segment_results.append(seg_data)
-            except OllamaError:
+            except ModelError:
                 segment_results.append({"summary": "", "chapters": []})
 
         # 合并结果
