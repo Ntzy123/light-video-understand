@@ -271,7 +271,9 @@ def main():
     if not client.check_connection():
         print("⚠ 未检测到 Ollama 服务，请确保 Ollama 已启动")
 
-    webview.start(debug=True)
+    # 打包版不启动 devtools，python 直跑时启动
+    is_packaged = getattr(sys, 'frozen', False)
+    webview.start(debug=not is_packaged)
 
 
 if __name__ == '__main__':

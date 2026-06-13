@@ -812,18 +812,6 @@ function renderSettingsPage(container) {
             </div>
         </div>
 
-        <div class="card settings-card">
-            <div class="section-title">长视频策略</div>
-            <div class="settings-group">
-                <div class="settings-item" style="border:none;padding:0;">
-                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
-                        <p><strong>自动切片机制：</strong>当视频时长或帧数超出上下文容量时，系统自动将视频切分为多个时间段分别处理，最后合并结果。</p>
-                        <p>上下文越小（如 4096），每个切片处理的时间段越短，切片数量越多，总耗时也越长。建议根据模型实际 context 设置。</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <div style="display:flex;gap:12px;margin-top:24px;">
             <button class="btn btn-primary" id="btnSaveConfig" onclick="handleSaveConfig()">
                 <span class="material-icons">save</span> 保存设置
