@@ -91,29 +91,58 @@ class ModelClient:
             return self._api_chat_text_only(prompt, system, temperature)
 
     def _safe_parse_json(self, text: str) -> dict:
-        """安全解析模型输出中的 JSON"""
-        text = text.strip()
-        if text.startswith("{") and text.endswith("}"):
+        """安全解析模型输出中的 JSON（含自动修复）"""
+
+        def _try_parse(raw: str) -> dict | None:
+            """尝试解析一段文本的 JSON，失败返回 None"""
+            raw = raw.strip()
+            if not raw:
+                return None
             try:
-                return json.loads(text)
+                return json.loads(raw)
             except json.JSONDecodeError:
                 pass
+            # 尝试修复常见 JSON 格式问题后再解析
+            try:
+                return json.loads(self._repair_json(raw))
+            except json.JSONDecodeError:
+                return None
 
+        text = text.strip()
+        if not text:
+            raise ModelError("模型返回空内容，无法解析")
+
+        # 1) 全文本直接尝试
+        if text.startswith("{"):
+            result = _try_parse(text)
+            if result is not None:
+                return result
+
+        # 2) 从 ```json ``` 代码块中提取
         match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
         if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
+            result = _try_parse(match.group(1))
+            if result is not None:
+                return result
 
+        # 3) 贪婪提取最外层 { ... }
         match = re.search(r"(\{.*\})", text, re.DOTALL)
         if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
+            result = _try_parse(match.group(1))
+            if result is not None:
+                return result
 
         raise ModelError(f"无法解析模型输出的 JSON:\n{text[:300]}")
+
+    @staticmethod
+    def _repair_json(text: str) -> str:
+        """尝试修复常见的 JSON 格式错误（缺失逗号、尾随逗号等）"""
+        # 对象/数组间缺失逗号: }{ → },{   ][ → ],[   }[ → },[   ]{ → ],{
+        text = re.sub(r"(\})\s*(\{|\[)", r"\1,\2", text)
+        text = re.sub(r"(\])\s*(\{|\[)", r"\1,\2", text)
+        # 尾随逗号: ,} → }   ,] → ]
+        text = re.sub(r",\s*([}\]])", r"\1", text)
+        return text
 
     # ----------------------------------------------------------------
     # Ollama 后端

@@ -57,6 +57,7 @@ class Api:
             "temperature": config.TEMPERATURE,
             "max_num_frames": config.MAX_NUM_FRAMES,
             "context_size": config.CONTEXT_SIZE,
+            "tokens_per_frame": config.TOKENS_PER_FRAME,
             "api_key": config.API_KEY,
             "api_base_url": config.API_BASE_URL,
             "api_model_name": config.API_MODEL_NAME,

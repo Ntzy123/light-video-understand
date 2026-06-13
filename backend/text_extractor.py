@@ -55,7 +55,10 @@ class TextExtractor:
         Returns:
             TextExtractResult 对象
         """
-        batch_size = batch_size or config.TEXT_BATCH_SIZE
+        batch_size = batch_size or min(
+            config.TEXT_BATCH_SIZE,
+            max(1, VideoProcessor.calculate_max_frames(config.TEXT_BATCH_SIZE)),
+        )
 
         self._emit_progress(on_progress, "extracting_metadata", 0.0, "正在读取视频信息...")
         meta = self.processor.get_metadata(video_path)

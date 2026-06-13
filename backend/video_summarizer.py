@@ -101,9 +101,11 @@ class VideoSummarizer:
         )
 
         response = self.client.chat_with_images(frames, prompt)
-        data = self.client._safe_parse_json(response)
-
-        self._emit_progress(on_progress, "done", 1.0, "摘要生成完成")
+        try:
+            data = self.client._safe_parse_json(response)
+        except ModelError:
+            self._emit_progress(on_progress, "done", 1.0, "摘要生成失败")
+            raise
 
         return self._parse_summarize_result(data)
 

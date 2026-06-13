@@ -160,14 +160,14 @@ class VideoProcessor:
     @staticmethod
     def calculate_max_frames(user_max_frames: int = None) -> int:
         """根据上下文窗口自动计算单次能发送的最大帧数"""
-        import math
         ctx = config.CONTEXT_SIZE
         tokens_per_frame = config.TOKENS_PER_FRAME
         prompt_budget = 500  # 预留 prompt + 回复 token
         frame_budget = max(1, ctx - prompt_budget)
         ctx_limit = max(1, frame_budget // tokens_per_frame)
         user_limit = user_max_frames or config.MAX_NUM_FRAMES
-        return min(user_limit, ctx_limit)
+        # 硬上限 24 帧：防止上下文太大时发送过多帧导致请求卡死
+        return min(user_limit, ctx_limit, 24)
 
     @staticmethod
     def estimate_segment_duration(total_seconds: float, max_frames: int) -> float:

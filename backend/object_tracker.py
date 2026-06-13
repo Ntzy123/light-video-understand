@@ -57,7 +57,10 @@ class ObjectTracker:
         Returns:
             TrackResult 对象
         """
-        batch_size = batch_size or config.TRACK_BATCH_SIZE
+        batch_size = batch_size or min(
+            config.TRACK_BATCH_SIZE,
+            max(1, VideoProcessor.calculate_max_frames(config.TRACK_BATCH_SIZE)),
+        )
 
         self._emit_progress(on_progress, "sampling", 0.0, "正在采样视频帧...")
 

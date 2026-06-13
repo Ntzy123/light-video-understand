@@ -890,6 +890,11 @@ function renderSettingsPage(container) {
                     <input type="number" id="cfgContextSize" min="2048" max="131072" step="1024" />
                     <span class="settings-hint">模型的 context length，自动据此控制发送帧数防超限。如 MiniCPM-V 4.6 为 4096、MiniCPM-o 4.5 为 16384</span>
                 </div>
+                <div class="settings-item">
+                    <label>每帧估算 Token</label>
+                    <input type="number" id="cfgTokensPerFrame" min="100" max="5000" step="50" />
+                    <span class="settings-hint">每帧消耗的 token 估算值（含 base64 + 描述）。值越小允许发送越多帧，但可能导致上下文溢出</span>
+                </div>
             </div>
         </div>
 
@@ -964,6 +969,7 @@ async function loadConfigToForm() {
 
         document.getElementById('cfgMaxFrames').value = cfg.max_num_frames || 12;
         document.getElementById('cfgContextSize').value = cfg.context_size || 8192;
+        document.getElementById('cfgTokensPerFrame').value = cfg.tokens_per_frame || 600;
     } catch (err) {
         Components.showToast('加载配置失败: ' + err.message, 'error');
     }
@@ -981,6 +987,7 @@ function getConfigFromForm() {
         TEMPERATURE: parseFloat(document.getElementById('cfgTemperature').value) || 0.1,
         MAX_NUM_FRAMES: parseInt(document.getElementById('cfgMaxFrames').value) || 12,
         CONTEXT_SIZE: parseInt(document.getElementById('cfgContextSize').value) || 8192,
+        TOKENS_PER_FRAME: parseInt(document.getElementById('cfgTokensPerFrame').value) || 600,
     };
 }
 
@@ -1113,6 +1120,7 @@ async function handleResetConfig() {
         TEMPERATURE: 0.1,
         MAX_NUM_FRAMES: 12,
         CONTEXT_SIZE: 8192,
+        TOKENS_PER_FRAME: 600,
     };
 
     try {

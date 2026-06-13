@@ -1,6 +1,7 @@
 """全局配置 + 用户设置持久化"""
 
 import os
+import sys
 import json
 
 # ===== 后端模式 =====
@@ -48,7 +49,13 @@ TEMPERATURE = 0.1
 MAX_SLICE_NUMS = 2
 
 # ===== 用户设置持久化 =====
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lightvideo_settings.json")
+if hasattr(sys, '_MEIPASS'):
+    # 打包后使用用户数据目录保存设置（避免临时目录丢失）
+    _app_data = os.path.join(os.path.expanduser("~"), ".lightvideo")
+    os.makedirs(_app_data, exist_ok=True)
+    SETTINGS_FILE = os.path.join(_app_data, "settings.json")
+else:
+    SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lightvideo_settings.json")
 
 
 def _cast(value, type_hint):
@@ -82,7 +89,7 @@ def load_settings():
 def save_settings(overlay: dict):
     """保存用户覆盖配置到 JSON 文件并更新内存"""
     allowed_keys = {"OLLAMA_URL", "MODEL_NAME", "OLLAMA_TIMEOUT", "TEMPERATURE",
-                    "MAX_NUM_FRAMES", "CONTEXT_SIZE",
+                    "MAX_NUM_FRAMES", "CONTEXT_SIZE", "TOKENS_PER_FRAME",
                     "API_BACKEND", "API_KEY", "API_BASE_URL", "API_MODEL_NAME"}
     to_persist = {}
     for key, value in overlay.items():

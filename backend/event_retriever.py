@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import json
 from dataclasses import dataclass, field
 from typing import Optional
@@ -40,7 +41,6 @@ class EventRetriever:
     """关键事件检索器"""
 
     def __init__(self):
-        self.client = ModelClient()
         self.processor = VideoProcessor()
 
     def retrieve(
@@ -79,9 +79,10 @@ class EventRetriever:
                 f"正在检索第 {i+1}/{total} 段...",
             )
 
-            # 采样帧
+            # 采样帧（受上下文窗口限制）
             seg_duration = seg["end_seconds"] - seg["start_seconds"]
-            n_frames = min(config.EVENT_FRAMES_PER_SEGMENT, max(4, int(seg_duration)))
+            max_allowed = VideoProcessor.calculate_max_frames(config.EVENT_FRAMES_PER_SEGMENT)
+            n_frames = min(max_allowed, max(4, int(seg_duration)))
             timestamps = [
                 seg["start_seconds"] + (seg_duration / (n_frames + 1)) * (j + 1)
                 for j in range(n_frames)
@@ -90,6 +91,9 @@ class EventRetriever:
 
             if not frames:
                 continue
+
+            # 每个段使用独立的 ModelClient 防止 Ollama 状态污染
+            client = ModelClient()
 
             # 构造 prompt
             sensitivity_desc = self._sensitivity_to_text(sensitivity)
@@ -116,9 +120,10 @@ class EventRetriever:
                 f'如果没有相关事件，has_event 设为 false，events 为空列表。'
             )
 
-            response = self.client.chat_with_images(frames, prompt)
+            # 调用模型（异常时跳过本段，不影响后续）
             try:
-                data = self.client._safe_parse_json(response)
+                response = client.chat_with_images(frames, prompt)
+                data = client._safe_parse_json(response)
             except Exception:
                 continue
 
@@ -145,6 +150,9 @@ class EventRetriever:
                     key_frame_index=global_frame_idx,
                 )
                 all_events.append(event)
+
+            # 段间短暂停顿，避免 Ollama 模型状态累积
+            time.sleep(0.3)
 
         # 合并邻近事件（时间间隔 < 3 秒的合并为一个）
         merged = self._merge_events(all_events)
