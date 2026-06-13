@@ -42,6 +42,26 @@ class OllamaClient:
         except requests.ConnectionError:
             return False
 
+    def get_available_models(self) -> list:
+        """获取 Ollama 上已拉取的模型列表"""
+        try:
+            resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                raw_names = [m.get("name", "") for m in data.get("models", [])]
+                # 标准化：去掉 :latest 后缀
+                return [n.replace(":latest", "") for n in raw_names]
+            return []
+        except Exception:
+            return []
+
+    def check_model_available(self, model_name: str = None) -> bool:
+        """检查指定模型是否在已拉取的模型列表中"""
+        target = (model_name or self.model).replace(":latest", "")
+        models = self.get_available_models()
+        # 精确匹配或前缀匹配（用户可能只写主名）
+        return any(m == target or m.startswith(target + ":") for m in models)
+
     def chat_with_images(
         self,
         images: list,
@@ -61,14 +81,13 @@ class OllamaClient:
         Returns:
             模型回复的文本
         """
-        # 构造消息内容
-        content = []
-        for img in images:
-            b64 = self._pil_to_base64(img)
-            content.append({"type": "image", "image": b64})
-        content.append({"type": "text", "text": prompt})
+        # 构造消息：Ollama 原生 /api/chat 接口使用 images 字段传递图片
+        images_b64 = [self._pil_to_base64(img) for img in images]
+        user_msg = {"role": "user", "content": prompt}
+        if images_b64:
+            user_msg["images"] = images_b64
 
-        messages = [{"role": "user", "content": content}]
+        messages = [user_msg]
         if system:
             messages.insert(0, {"role": "system", "content": system})
 

@@ -62,12 +62,21 @@ class VideoSummarizer:
 
         max_frames = max_frames or config.MAX_NUM_FRAMES
 
-        # 长视频分段处理
-        if duration > 600:  # >10 分钟
-            return self._summarize_long(video_path, meta, max_frames, on_progress)
+        # 根据上下文窗口自动调整帧数
+        actual_frames = VideoProcessor.calculate_max_frames(max_frames)
+
+        # 判断是否需要分段：时长超过阈值 或 帧数被上下文严重限制（<=4帧说明上下文太小）
+        seg_threshold = 600 if config.CONTEXT_SIZE >= 8192 else 120  # 上下文小则提前切片
+        need_segment = duration > seg_threshold or actual_frames <= 4
+
+        if need_segment:
+            # 动态计算每段时长
+            seg_seconds = VideoProcessor.estimate_segment_duration(duration, actual_frames)
+            # 确保每段 vs 用户期望的最大帧数
+            return self._summarize_long(video_path, meta, max_frames, on_progress, seg_seconds)
 
         self._emit_progress(on_progress, "sampling_frames", 0.2, "正在采样帧...")
-        frames = self.processor.sample_frames(video_path, max_frames)
+        frames = self.processor.sample_frames(video_path, actual_frames)
 
         if not frames:
             raise VideoError("视频无有效帧，无法生成摘要")
@@ -104,9 +113,11 @@ class VideoSummarizer:
         meta: dict,
         max_frames: int,
         on_progress: Optional[callable],
+        segment_seconds: int = 600,
     ) -> SummarizeResult:
         """长视频分段摘要"""
-        segments = self.processor.video_to_segments(video_path, 10)  # 10分钟一段
+        segment_minutes = max(2, segment_seconds // 60)
+        segments = self.processor.video_to_segments(video_path, segment_minutes)
         segment_results = []
         total = len(segments)
 
@@ -118,7 +129,8 @@ class VideoSummarizer:
                 f"正在分析第 {i+1}/{total} 段 ({seg['start_seconds']}s - {seg['end_seconds']}s)...",
             )
 
-            frames_per_seg = max(4, max_frames // total)
+            actual_per_seg = VideoProcessor.calculate_max_frames(max_frames)
+            frames_per_seg = max(2, min(max_frames, actual_per_seg))
             indices = self._segment_frame_indices(
                 video_path, seg["start_seconds"], seg["end_seconds"], frames_per_seg,
             )

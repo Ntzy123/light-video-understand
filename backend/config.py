@@ -1,4 +1,7 @@
-"""全局配置"""
+"""全局配置 + 用户设置持久化"""
+
+import os
+import json
 
 # ===== Ollama 配置 =====
 OLLAMA_URL = "http://localhost:11434"
@@ -6,7 +9,9 @@ MODEL_NAME = "minicpm-v4.6"
 OLLAMA_TIMEOUT = 120  # 单次请求超时（秒）
 
 # ===== 视频采样 =====
-MAX_NUM_FRAMES = 32      # 最大采样帧数
+MAX_NUM_FRAMES = 12      # 最大采样帧数
+CONTEXT_SIZE = 4096      # 模型上下文窗口大小（tokens），控制单次能发送的帧数
+TOKENS_PER_FRAME = 600   # 每帧估算消耗的 token 数（含 base64 + 描述）
 SAMPLE_FPS_DIVISOR = 1   # 采样间隔 = avg_fps / divisor
 
 # ===== 文字提取 =====
@@ -33,3 +38,55 @@ RETRY_DELAY = 2          # 重试间隔（秒）
 # ===== 模型参数 =====
 TEMPERATURE = 0.1
 MAX_SLICE_NUMS = 2
+
+# ===== 用户设置持久化 =====
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lightvideo_settings.json")
+
+
+def _cast(value, type_hint):
+    """将值转换为指定类型"""
+    if type_hint is bool:
+        if isinstance(value, str):
+            return value.lower() in ("true", "1", "yes")
+        return bool(value)
+    if type_hint is int:
+        return int(float(value)) if isinstance(value, str) else int(value)
+    if type_hint is float:
+        return float(value) if isinstance(value, str) else float(value)
+    return value
+
+
+def load_settings():
+    """从 JSON 文件加载用户覆盖配置"""
+    if not os.path.exists(SETTINGS_FILE):
+        return
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        for key, value in data.items():
+            if key in globals():
+                orig = globals()[key]
+                globals()[key] = _cast(value, type(orig))
+    except Exception:
+        pass
+
+
+def save_settings(overlay: dict):
+    """保存用户覆盖配置到 JSON 文件并更新内存"""
+    allowed_keys = {"OLLAMA_URL", "MODEL_NAME", "OLLAMA_TIMEOUT", "TEMPERATURE", "MAX_NUM_FRAMES", "CONTEXT_SIZE"}
+    to_persist = {}
+    for key, value in overlay.items():
+        if key in allowed_keys and key in globals():
+            orig = globals()[key]
+            casted = _cast(value, type(orig))
+            globals()[key] = casted
+            to_persist[key] = casted
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(to_persist, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+# 模块导入时自动加载持久化设置
+load_settings()

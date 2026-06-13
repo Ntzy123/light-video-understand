@@ -47,6 +47,23 @@ const API = (() => {
             return _api().select_video_file();
         },
 
+        // ---- 配置 ----
+        getConfig: async () => {
+            if (!isPyWebView()) return {
+                ollama_url: 'http://localhost:11434',
+                model_name: 'minicpm-v4.6',
+                ollama_timeout: 120,
+                temperature: 0.1,
+                max_num_frames: 32,
+                context_size: 8192,
+            };
+            return _api().get_config();
+        },
+
+        saveConfig: async (config) => {
+            return _call('save_config', JSON.stringify(config));
+        },
+
         // ---- 功能一：视频摘要 ----
         generateSummary: async (videoPath) => {
             return _call('generate_summary', videoPath);

@@ -55,6 +55,7 @@ function navigateTo(page) {
         case 'events': renderEventsPage(container); break;
         case 'scenes': renderScenesPage(container); break;
         case 'track': renderTrackPage(container); break;
+        case 'settings': renderSettingsPage(container); break;
         case 'about': renderAboutPage(container); break;
         default: renderHome(container);
     }
@@ -76,8 +77,13 @@ async function checkOllamaStatus() {
     try {
         const result = await API.checkOllama();
         if (result.available) {
-            dot.className = 'status-dot online';
-            label.textContent = `${result.model} 已就绪`;
+            if (result.model_available) {
+                dot.className = 'status-dot online';
+                label.textContent = `${result.model} 已就绪`;
+            } else {
+                dot.className = 'status-dot offline';
+                label.textContent = `模型 ${result.model} 未拉取`;
+            }
         } else {
             dot.className = 'status-dot offline';
             label.textContent = 'Ollama 未连接';
@@ -138,7 +144,7 @@ function renderHome(container) {
             <div class="drop-zone-icon">
                 <span class="material-icons">video_file</span>
             </div>
-            <div class="drop-zone-text">${hasVideo ? name : '拖拽视频到此处，或点击选择文件'}</div>
+            <div class="drop-zone-text">${hasVideo ? name : '点击选择视频文件'}</div>
             <div class="drop-zone-hint">支持 MP4 / MOV / AVI / MKV 格式</div>
         </div>
     `;
@@ -208,9 +214,6 @@ function renderHome(container) {
     html += '</div>';
 
     container.innerHTML = html;
-
-    // 拖拽支持
-    setupDragDrop();
 }
 
 function clearVideo() {
@@ -224,28 +227,6 @@ function clearVideo() {
     AppState.trackResult = null;
     Components.showToast('已移除视频', 'info');
     navigateTo('home');
-}
-
-function setupDragDrop() {
-    const zone = document.getElementById('dropZone');
-    if (!zone) return;
-
-    zone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        zone.classList.add('dragover');
-    });
-    zone.addEventListener('dragleave', () => {
-        zone.classList.remove('dragover');
-    });
-    zone.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        zone.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            // 在 pywebview 中无法直接获取文件路径，提示使用点击选择
-            Components.showToast('请点击选择文件（WebView 不支持拖拽获取路径）', 'warning');
-        }
-    });
 }
 
 // ================================================================
@@ -770,6 +751,213 @@ function renderTrackResult(data) {
 }
 
 // ================================================================
+// 设置页面
+// ================================================================
+function renderSettingsPage(container) {
+    container.innerHTML = `
+        <div class="page-title">⚙️ 设置</div>
+        <div class="page-subtitle">配置 Ollama 服务连接与模型参数</div>
+
+        <div class="card settings-card">
+            <div class="section-title">Ollama 服务</div>
+
+            <div class="settings-group">
+                <div class="settings-item">
+                    <label>服务地址</label>
+                    <input type="text" id="cfgOllamaUrl" placeholder="http://localhost:11434" />
+                    <span class="settings-hint">Ollama 服务的 HTTP 地址，默认 http://localhost:11434</span>
+                </div>
+                <div class="settings-item">
+                    <label>模型名称</label>
+                    <input type="text" id="cfgModelName" placeholder="minicpm-v4.6" />
+                    <span class="settings-hint">使用的多模态视觉模型，如 minicpm-v4.6、llava:7b</span>
+                </div>
+                <div class="settings-item">
+                    <label>请求超时（秒）</label>
+                    <input type="number" id="cfgTimeout" min="10" max="600" />
+                    <span class="settings-hint">单次 Ollama 请求的超时时间，视频较长时可适当增大</span>
+                </div>
+            </div>
+
+            <div style="display:flex;gap:12px;margin-top:8px;">
+                <button class="btn btn-secondary" id="btnTestConnection" onclick="handleTestConnection()">
+                    <span class="material-icons">wifi_find</span> 测试连接
+                </button>
+                <div id="connectionResult" style="display:none;align-self:center;font-size:13px;"></div>
+            </div>
+        </div>
+
+        <div class="card settings-card">
+            <div class="section-title">模型参数</div>
+
+            <div class="settings-group">
+                <div class="settings-item">
+                    <label>生成温度 (Temperature)</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="range" id="cfgTemperature" min="0" max="1" step="0.05" value="0.1" oninput="updateSliderValue(this)" />
+                        <span class="slider-value" id="cfgTemperatureVal">0.1</span>
+                    </div>
+                    <span class="settings-hint">值越低回答越确定，值越高越有创造力。推荐 0.1~0.3</span>
+                </div>
+                <div class="settings-item">
+                    <label>最大采样帧数</label>
+                    <input type="number" id="cfgMaxFrames" min="1" max="128" />
+                    <span class="settings-hint">分析视频时最多抽取的帧数，数值越大结果越精确但耗时更长</span>
+                </div>
+                <div class="settings-item">
+                    <label>上下文窗口大小（tokens）</label>
+                    <input type="number" id="cfgContextSize" min="2048" max="131072" step="1024" />
+                    <span class="settings-hint">模型的 context length，自动据此控制发送帧数防超限。如 MiniCPM-V 为 8192，qwen2.5-vl 72B 为 131072</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card settings-card">
+            <div class="section-title">长视频策略</div>
+            <div class="settings-group">
+                <div class="settings-item" style="border:none;padding:0;">
+                    <div style="font-size:12px;color:var(--text-secondary);line-height:1.6;">
+                        <p><strong>自动切片机制：</strong>当视频时长或帧数超出上下文容量时，系统自动将视频切分为多个时间段分别处理，最后合并结果。</p>
+                        <p>上下文越小（如 4096），每个切片处理的时间段越短，切片数量越多，总耗时也越长。建议根据模型实际 context 设置。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:24px;">
+            <button class="btn btn-primary" id="btnSaveConfig" onclick="handleSaveConfig()">
+                <span class="material-icons">save</span> 保存设置
+            </button>
+            <button class="btn btn-secondary" onclick="handleResetConfig()">
+                <span class="material-icons">restart_alt</span> 恢复默认
+            </button>
+        </div>
+    `;
+
+    // 加载当前配置
+    loadConfigToForm();
+}
+
+async function loadConfigToForm() {
+    try {
+        const cfg = await API.getConfig();
+
+        document.getElementById('cfgOllamaUrl').value = cfg.ollama_url || 'http://localhost:11434';
+        document.getElementById('cfgModelName').value = cfg.model_name || 'minicpm-v4.6';
+        document.getElementById('cfgTimeout').value = cfg.ollama_timeout || 120;
+
+        const tempInput = document.getElementById('cfgTemperature');
+        tempInput.value = cfg.temperature ?? 0.1;
+        document.getElementById('cfgTemperatureVal').textContent = cfg.temperature ?? 0.1;
+
+        document.getElementById('cfgMaxFrames').value = cfg.max_num_frames || 12;
+        document.getElementById('cfgContextSize').value = cfg.context_size || 8192;
+    } catch (err) {
+        Components.showToast('加载配置失败: ' + err.message, 'error');
+    }
+}
+
+function getConfigFromForm() {
+    return {
+        OLLAMA_URL: document.getElementById('cfgOllamaUrl').value.trim(),
+        MODEL_NAME: document.getElementById('cfgModelName').value.trim(),
+        OLLAMA_TIMEOUT: parseInt(document.getElementById('cfgTimeout').value) || 120,
+        TEMPERATURE: parseFloat(document.getElementById('cfgTemperature').value) || 0.1,
+        MAX_NUM_FRAMES: parseInt(document.getElementById('cfgMaxFrames').value) || 12,
+        CONTEXT_SIZE: parseInt(document.getElementById('cfgContextSize').value) || 8192,
+    };
+}
+
+async function handleTestConnection() {
+    const btn = document.getElementById('btnTestConnection');
+    const resultEl = document.getElementById('connectionResult');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite;">sync</span> 连接中...';
+    resultEl.style.display = 'none';
+
+    // 先保存配置以便 check_ollama 使用新值
+    const cfg = getConfigFromForm();
+    await API.saveConfig(cfg);
+
+    try {
+        const res = await API.checkOllama();
+        resultEl.style.display = 'flex';
+        if (res.available && res.model_available) {
+            resultEl.innerHTML = `<span class="material-icons" style="color:var(--success);font-size:18px;">check_circle</span> 连接成功 — ${res.model} 已就绪`;
+            resultEl.style.color = 'var(--success)';
+        } else if (res.available && !res.model_available) {
+            resultEl.innerHTML = `<span class="material-icons" style="color:var(--warning);font-size:18px;">warning</span> Ollama 已连接，但模型 <strong>${res.model}</strong> 不可用，请检查模型名称是否正确`;
+            resultEl.style.color = 'var(--warning)';
+        } else {
+            resultEl.innerHTML = `<span class="material-icons" style="color:var(--error);font-size:18px;">error</span> 连接失败，请检查 Ollama 是否已启动`;
+            resultEl.style.color = 'var(--error)';
+        }
+    } catch {
+        resultEl.style.display = 'flex';
+        resultEl.innerHTML = `<span class="material-icons" style="color:var(--error);font-size:18px;">error</span> 连接失败，请检查 Ollama 是否已启动`;
+        resultEl.style.color = 'var(--error)';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="material-icons">wifi_find</span> 测试连接';
+    }
+
+    // 刷新侧边栏状态
+    checkOllamaStatus();
+}
+
+async function handleSaveConfig() {
+    const cfg = getConfigFromForm();
+
+    if (!cfg.OLLAMA_URL) {
+        Components.showToast('请填写 Ollama 服务地址', 'warning');
+        return;
+    }
+    if (!cfg.MODEL_NAME) {
+        Components.showToast('请填写模型名称', 'warning');
+        return;
+    }
+
+    try {
+        const result = await API.saveConfig(cfg);
+        if (result.success) {
+            Components.showToast('设置已保存', 'success');
+            // 刷新侧边栏状态
+            checkOllamaStatus();
+        } else {
+            Components.showToast(result.error || '保存失败', 'error');
+        }
+    } catch (err) {
+        Components.showToast(err.message || '保存失败', 'error');
+    }
+}
+
+async function handleResetConfig() {
+    const defaults = {
+        OLLAMA_URL: 'http://localhost:11434',
+        MODEL_NAME: 'minicpm-v4.6',
+        OLLAMA_TIMEOUT: 120,
+        TEMPERATURE: 0.1,
+        MAX_NUM_FRAMES: 12,
+        CONTEXT_SIZE: 8192,
+    };
+
+    try {
+        const result = await API.saveConfig(defaults);
+        if (result.success) {
+            // 重新加载表单
+            await loadConfigToForm();
+            Components.showToast('已恢复默认设置', 'info');
+            checkOllamaStatus();
+        } else {
+            Components.showToast(result.error || '恢复失败', 'error');
+        }
+    } catch (err) {
+        Components.showToast(err.message || '恢复失败', 'error');
+    }
+}
+
+// ================================================================
 // 关于页面
 // ================================================================
 function renderAboutPage(container) {
@@ -810,8 +998,16 @@ function renderAboutPage(container) {
     API.checkOllama().then(r => {
         const el = document.getElementById('aboutOllamaStatus');
         if (el) {
-            el.textContent = r.available ? `已连接 (${r.model})` : '未连接';
-            el.style.color = r.available ? 'var(--success)' : 'var(--error)';
+            if (r.available && r.model_available) {
+                el.textContent = `已连接 (${r.model})`;
+                el.style.color = 'var(--success)';
+            } else if (r.available && !r.model_available) {
+                el.textContent = `Ollama 已连接，但模型 ${r.model} 未拉取`;
+                el.style.color = 'var(--warning)';
+            } else {
+                el.textContent = '未连接';
+                el.style.color = 'var(--error)';
+            }
         }
     });
 }
@@ -861,11 +1057,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // 渲染首页
     navigateTo('home');
 
-    // 检测 Ollama 状态
-    checkOllamaStatus();
-
     // 添加 spin 动画
     const style = document.createElement('style');
     style.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
     document.head.appendChild(style);
+});
+
+// pywebview 就绪后自动检测 Ollama 连接与模型状态
+window.addEventListener('pywebviewready', () => {
+    checkOllamaStatus();
 });

@@ -338,7 +338,7 @@ body {
     background: #FFFFFF;
     margin-bottom: 24px;
 }
-.drop-zone:hover, .drop-zone.dragover {
+.drop-zone:hover {
     border-color: var(--accent);
     background: rgba(0,113,227,0.03);
     transform: translateY(-2px);
@@ -836,6 +836,48 @@ input[type="range"]::-webkit-slider-thumb:hover {
     justify-content: center;
     animation: fadeIn 0.2s ease;
 }
+
+/* ---------- Settings Page ---------- */
+.settings-card {
+    max-width: 640px;
+    margin-bottom: 20px;
+}
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.settings-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.settings-item label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.settings-item input[type="text"],
+.settings-item input[type="number"] {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: #FFFFFF;
+    max-width: 400px;
+}
+.settings-item input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,113,227,0.12);
+}
+.settings-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
 .modal {
     background: #FFFFFF;
     border-radius: var(--radius-md);
@@ -935,4 +977,46 @@ input[type="range"]::-webkit-slider-thumb:hover {
     font-size: 13px;
     z-index: 9999;
     animation: fadeIn 0.2s ease;
+}
+
+/* ---------- Settings Page ---------- */
+.settings-card {
+    max-width: 640px;
+    margin-bottom: 20px;
+}
+.settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.settings-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.settings-item label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.settings-item input[type="text"],
+.settings-item input[type="number"] {
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: var(--font);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    background: #FFFFFF;
+    max-width: 400px;
+}
+.settings-item input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,113,227,0.12);
+}
+.settings-hint {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 2px;
 }

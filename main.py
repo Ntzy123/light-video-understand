@@ -33,10 +33,37 @@ class Api:
     # ================================================================
 
     def check_ollama(self) -> dict:
-        """检测 Ollama 服务状态"""
+        """检测 Ollama 服务状态及模型可用性"""
         client = OllamaClient()
         ok = client.check_connection()
-        return {"available": ok, "model": config.MODEL_NAME}
+        if not ok:
+            return {"available": False, "model": config.MODEL_NAME, "model_available": False}
+        model_ok = client.check_model_available()
+        return {
+            "available": True,
+            "model": config.MODEL_NAME,
+            "model_available": model_ok,
+        }
+
+    def get_config(self) -> dict:
+        """获取当前配置"""
+        return {
+            "ollama_url": config.OLLAMA_URL,
+            "model_name": config.MODEL_NAME,
+            "ollama_timeout": config.OLLAMA_TIMEOUT,
+            "temperature": config.TEMPERATURE,
+            "max_num_frames": config.MAX_NUM_FRAMES,
+            "context_size": config.CONTEXT_SIZE,
+        }
+
+    def save_config(self, cfg: str) -> dict:
+        """保存配置（接收 JSON 字符串）"""
+        try:
+            data = json.loads(cfg)
+            config.save_settings(data)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def get_video_metadata(self, video_path: str) -> dict:
         """获取视频元数据"""
@@ -45,12 +72,12 @@ class Api:
     def select_video_file(self) -> dict:
         """打开系统文件选择对话框（由 pywebview 前端调用）"""
         try:
-            result = window.create_file_dialog(
+            w = self._window if hasattr(self, '_window') and self._window else webview.active_window()
+            result = w.create_file_dialog(
                 webview.OPEN_DIALOG,
-                "选择视频文件",
-                filters=[("视频文件", "*.mp4 *.mov *.avi *.mkv *.webm")],
+                file_types=('Video Files (*.mp4;*.mov;*.avi;*.mkv;*.webm)',),
             )
-            if result:
+            if result and len(result) > 0:
                 return {"selected": True, "path": result[0]}
             return {"selected": False, "path": ""}
         except Exception:

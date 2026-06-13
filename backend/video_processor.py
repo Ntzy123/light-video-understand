@@ -158,7 +158,25 @@ class VideoProcessor:
     # ----------------------------------------------------------------
 
     @staticmethod
-    def frame_index_to_timestamp(frame_idx: int, fps: float) -> str:
+    def calculate_max_frames(user_max_frames: int = None) -> int:
+        """根据上下文窗口自动计算单次能发送的最大帧数"""
+        import math
+        ctx = config.CONTEXT_SIZE
+        tokens_per_frame = config.TOKENS_PER_FRAME
+        prompt_budget = 500  # 预留 prompt + 回复 token
+        frame_budget = max(1, ctx - prompt_budget)
+        ctx_limit = max(1, frame_budget // tokens_per_frame)
+        user_limit = user_max_frames or config.MAX_NUM_FRAMES
+        return min(user_limit, ctx_limit)
+
+    @staticmethod
+    def estimate_segment_duration(total_seconds: float, max_frames: int) -> float:
+        """估算小上下文下每段视频应裁切的时长（秒），保证每段帧数 ≤ max_frames"""
+        frames_needed = min(max_frames * 3, max_frames + 10)  # 每段想放约 max_frames 帧
+        if total_seconds <= 0:
+            return 600
+        seg_seconds = max(30, total_seconds / max(1, frames_needed) * max_frames)
+        return min(seg_seconds, 600)  # 最长不超过 10 分钟
         """将帧号转为 HH:MM:SS.mmm 格式"""
         if fps <= 0:
             return "00:00:00.000"
